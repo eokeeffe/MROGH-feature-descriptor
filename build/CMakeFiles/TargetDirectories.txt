@@ -1,3 +1,0 @@
-/home/evanokeeffe/ImageDepthProcessing/MROGH-feature-descriptor/build/CMakeFiles/rebuild_cache.dir
-/home/evanokeeffe/ImageDepthProcessing/MROGH-feature-descriptor/build/CMakeFiles/edit_cache.dir
-/home/evanokeeffe/ImageDepthProcessing/MROGH-feature-descriptor/build/CMakeFiles/main.dir
