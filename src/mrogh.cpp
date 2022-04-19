@@ -17,7 +17,7 @@ See the GNU General Public License for more details.
 
 */
 
-#include "mrogh.h"
+#include <mrogh.h>
 #include <stdio.h>
 #include <functional>
 #include <algorithm>
@@ -55,43 +55,46 @@ OxKey* ReadKeyFile(const char* filename, int& keynum)
 
 void CalcuTrans(OxKey* pKeys,int n)
 {
-	CvMat *A = cvCreateMat(2,2,CV_32FC1);
-	CvMat *EigenVals = cvCreateMat(2,1,CV_32FC1);
-	CvMat *EigenVects = cvCreateMat(2,2,CV_32FC1);
-	CvMat *EigenVals_sqrt_inv = cvCreateMat(2,2,CV_32FC1);
-	float *A_data = A->data.fl;
+	cv::Mat A = cv::Mat(2,2,CV_32FC1);
+	cv::Mat EigenVals = cv::Mat(2,1,CV_32FC1);
+	cv::Mat EigenVects = cv::Mat(2,2,CV_32FC1);
+	cv::Mat EigenVals_sqrt_inv = cv::Mat(2,2,CV_32FC1);
+	
 	for (int i = 0;i < n;i++)
 	{
-		A_data[0] = pKeys[i].a;
-		A_data[1] = pKeys[i].b;
-		A_data[2] = pKeys[i].b;
-		A_data[3] = pKeys[i].c;
+		A.at<float>(0,0) = pKeys[i].a;
+		A.at<float>(0,1) = pKeys[i].b;
+		A.at<float>(1,0) = pKeys[i].b;
+		A.at<float>(1,1) = pKeys[i].c;
 		// A = U' * D * U;
-		cvEigenVV(A, EigenVects, EigenVals);
+		cv::eigen( A, EigenVals, EigenVects);
 		// D = D^-0.5
-		EigenVals_sqrt_inv->data.fl[0] = 1.0f / (float)sqrt(EigenVals->data.fl[0]);
-		EigenVals_sqrt_inv->data.fl[1] = 0;
-		EigenVals_sqrt_inv->data.fl[2] = 0;
-		EigenVals_sqrt_inv->data.fl[3] = 1.0f / (float)sqrt(EigenVals->data.fl[1]);
-		pKeys[i].square = EigenVals_sqrt_inv->data.fl[0] * EigenVals_sqrt_inv->data.fl[3];
+		EigenVals_sqrt_inv.at<float>(0,0) = 1.0f / (float)sqrt(EigenVals.at<float>(0,0));
+		EigenVals_sqrt_inv.at<float>(0,1) = 0;
+		EigenVals_sqrt_inv.at<float>(1,0) = 0;
+		EigenVals_sqrt_inv.at<float>(1,1) = 1.0f / (float)sqrt(EigenVals.at<float>(1,0));
+		pKeys[i].square = EigenVals_sqrt_inv.at<float>(0,0) * EigenVals_sqrt_inv.at<float>(1,1);
 		// U = D * U
-		cvMatMul(EigenVals_sqrt_inv,EigenVects,EigenVals_sqrt_inv);
-		cvTranspose(EigenVects,EigenVects);
+		int esv_w = EigenVals_sqrt_inv.rows;
+		int ev_h = EigenVects.cols;
+		EigenVals_sqrt_inv *= EigenVects;
+		cv::Mat EigenVects_T = EigenVects.t();
 		// A = U' * (D * U)
-		cvMatMul(EigenVects,EigenVals_sqrt_inv,A);
+		//cvMatMul(EigenVects,EigenVals_sqrt_inv,A);
+		A = EigenVects_T * EigenVals_sqrt_inv;
 		
-		pKeys[i].trans[0] = A_data[0];
-		pKeys[i].trans[1] = A_data[1];
-		pKeys[i].trans[2] = A_data[2];
-		pKeys[i].trans[3] = A_data[3];
+		pKeys[i].trans[0] = A.at<float>(0,0);
+		pKeys[i].trans[1] = A.at<float>(0,1);
+		pKeys[i].trans[2] = A.at<float>(1,0);
+		pKeys[i].trans[3] = A.at<float>(1,1);
 	}
-	cvReleaseMat(&A);
-	cvReleaseMat(&EigenVals);
-	cvReleaseMat(&EigenVects);
-	cvReleaseMat(&EigenVals_sqrt_inv);
+	A = NULL;
+	EigenVals = NULL;
+	EigenVects = NULL;
+	EigenVals_sqrt_inv = NULL;
 }
 
-int* Extract_MROGH(const OxKey &key, IplImage *im, int nDir,int nOrder,int nRegion)
+int* Extract_MROGH(const OxKey &key, cv::Mat im, int nDir,int nOrder,int nRegion)
 {
 	int i;
 	int *desc = new int[nDir*nOrder*nRegion];
@@ -115,7 +118,7 @@ int* Extract_MROGH(const OxKey &key, IplImage *im, int nDir,int nOrder,int nRegi
 	return desc;
 }
 
-int* Extract_OGH(const OxKey &key,IplImage *imSrc,int nDir,int nOrder,double scale,int patch_width)
+int* Extract_OGH(const OxKey &key, cv::Mat imSrc,int nDir,int nOrder,double scale,int patch_width)
 {
 	int nPixels = 0;
 	Pixel *pPixel_Array = Normalize_Patch(key,imSrc,scale,patch_width,nPixels);
@@ -132,16 +135,23 @@ int* Extract_OGH(const OxKey &key,IplImage *imSrc,int nDir,int nOrder,double sca
 		{
 			int idx_thresh_low = gap*i;
 			int idx_thresh_high = gap*(i+1);
-			if (idx_thresh_high > nPixels-1) idx_thresh_high = nPixels-1;
-			if (pPixel_Array[j].gray < pPixel_Array[idx_thresh_low].gray) continue;
-			if (pPixel_Array[j].gray > pPixel_Array[idx_thresh_high].gray) break;
-			
+			if (idx_thresh_high > nPixels-1){
+			    idx_thresh_high = nPixels-1;
+			}
+			if (pPixel_Array[j].gray < pPixel_Array[idx_thresh_low].gray){
+			    continue;
+			}
+			if (pPixel_Array[j].gray > pPixel_Array[idx_thresh_high].gray){
+			    break;
+			}
 			double dir = atan2(pPixel_Array[j].orient_dy,pPixel_Array[j].orient_dx);
 			double mag = pPixel_Array[j].orient_dy * pPixel_Array[j].orient_dy
 				+ pPixel_Array[j].orient_dx * pPixel_Array[j].orient_dx;
 			mag = sqrt(mag);
 			double idxDir = (dir + CV_PI) * nDir / (2.0 * CV_PI);
-			if ((int)idxDir == nDir)	idxDir -= nDir;
+			if ((int)idxDir == nDir){
+			    idxDir -= nDir;
+			}
 			int dirIdx[2];
 			float dirWeight[2];
 			dirIdx[0] = (int)idxDir;
@@ -208,16 +218,16 @@ void Norm_desc(float *desc, double illuThresh, int dim)
 	}
 }
 
-Pixel* Normalize_Patch(const OxKey &key,IplImage* in,float scale,int patch_width,int &nPixels)
+Pixel* Normalize_Patch(const OxKey &key, cv::Mat in, float scale, int patch_width, int &nPixels)
 {
 	float trans[4];
 	trans[0] = key.trans[0] * (2.0 * scale / patch_width);
 	trans[1] = key.trans[1] * (2.0 * scale / patch_width);
 	trans[2] = key.trans[2] * (2.0 * scale / patch_width);
 	trans[3] = key.trans[3] * (2.0 * scale / patch_width);
-	int minX = in->width;
+	int minX = in.cols;
 	int maxX = 0;
-	int minY = in->height;
+	int minY = in.rows;
 	int maxY = 0;
 	double theta_interval = 5 * CV_PI / 180;
 	for (int i = 0;i < 72;i++)
@@ -233,29 +243,35 @@ Pixel* Normalize_Patch(const OxKey &key,IplImage* in,float scale,int patch_width
 	}
 	minX = minX < 0 ? 0 : minX;
 	minY = minY < 0 ? 0 : minY;
-	maxX = maxX > (in->width - 1) ? (in->width - 1) : maxX;
-	maxY = maxY > (in->height - 1) ? (in->height - 1) : maxY;
+	maxX = maxX > (in.cols - 1) ? (in.cols - 1) : maxX;
+	maxY = maxY > (in.rows - 1) ? (in.rows - 1) : maxY;
 	int regionW = maxX - minX + 1;
 	int regionH = maxY - minY + 1;
-	CvRect rc = cvRect(minX,minY,regionW,regionH);
-	cvSetImageROI(in,rc);
-	IplImage *in_smooth = cvCreateImage(cvSize(regionW,regionH),IPL_DEPTH_8U,1);
+	
+	cv::Rect rc(minX,minY,regionW,regionH);
+	//cvSetImageROI(in,rc);
+	
+	cv::Mat image_roi(in,rc);
+	cv::Mat in_smooth = cv::Mat(regionW,regionH,CV_8U);
+	
  	if ( key.square * scale * scale > (patch_width * patch_width / 4.0) )
  	{
  		double sigma = key.square * scale * scale / ((patch_width * patch_width / 4.0));
  		sigma = sqrt(sigma);
- 		cvSmooth(in,in_smooth,CV_GAUSSIAN,5,5,sigma);
+ 		//cvSmooth(in,in_smooth,CV_GAUSSIAN,5,5,sigma);
+ 		cv::GaussianBlur( image_roi, in_smooth, cv::Size( 5, 5 ), sigma, 0 );
  	}
 	else
 	{
-		cvCopyImage(in,in_smooth);
+	    in_smooth = image_roi.clone();
 	}
-	cvResetImageROI(in);
-
+    
 	int patch_radius = patch_width / 2;
 	int x,y;
-	IplImage* outPatch = cvCreateImage(cvSize(patch_radius*2+1+16,patch_radius*2+1+16),IPL_DEPTH_32F,1);
-	float *out_data = (float*)outPatch->imageData;
+	
+	cv::Mat outPatch = cv::Mat(cv::Size(patch_radius*2+1+16,patch_radius*2+1+16),CV_32FC1);
+	
+	float *out_data = (float*)outPatch.data;
 	for (y = -patch_radius-8;y <= patch_radius+8;y++)
 	{
 		for (x = -patch_radius-8;x <= patch_radius+8;x++)
@@ -264,19 +280,19 @@ Pixel* Normalize_Patch(const OxKey &key,IplImage* in,float scale,int patch_width
 			float y1 = trans[2] * x + trans[3] * y + key.y;
 			x1 -= minX;
 			y1 -= minY;
-			if (x1 < 0 || x1 > (in_smooth->width - 1) || y1 < 0 || y1 > (in_smooth->height - 1))
+			if (x1 < 0 || x1 > (in_smooth.cols - 1) || y1 < 0 || y1 > (in_smooth.rows - 1))
 			{
-				out_data[(y + patch_radius + 8) * outPatch->width + (x + patch_radius + 8)] = 0;
+				out_data[(y + patch_radius + 8) * outPatch.cols + (x + patch_radius + 8)] = 0;
 			}
 			else
 			{
-				out_data[(y + patch_radius + 8) * outPatch->width + (x + patch_radius + 8)] = 
+				out_data[(y + patch_radius + 8) * outPatch.cols + (x + patch_radius + 8)] = 
 					get_image_value(in_smooth,x1,y1);
 			}
 		}
 	}
 	
-	cvSmooth(outPatch,outPatch,CV_GAUSSIAN,5,5,1.6);
+	cv::GaussianBlur( outPatch, outPatch, cv::Size( 5, 5 ), 1.6, 0 );
 	
 	Pixel *pPixel_Array = new Pixel[patch_width * patch_width - 1];
 	int nCount = 0;
@@ -303,7 +319,10 @@ Pixel* Normalize_Patch(const OxKey &key,IplImage* in,float scale,int patch_width
 			float trans_y = trans[2] * x1 + trans[3] * y1 + key.y;
 			trans_x -= minX;
 			trans_y -= minY;
-			if (trans_x < 0 || trans_x > (in_smooth->width - 1) || trans_y < 0 || trans_y > (in_smooth->height - 1))	continue;
+			if (trans_x < 0 || trans_x > (in_smooth.cols - 1) || 
+			    trans_y < 0 || trans_y > (in_smooth.rows - 1)){
+			    continue;
+			 }
 			orient_dx = get_image_value(in_smooth,trans_x,trans_y);
 
 			x1 = x - r * cos(theta);
@@ -312,7 +331,10 @@ Pixel* Normalize_Patch(const OxKey &key,IplImage* in,float scale,int patch_width
 			trans_y = trans[2] * x1 + trans[3] * y1 + key.y; 
 			trans_x -= minX;
 			trans_y -= minY;
-			if (trans_x < 0 || trans_x > (in_smooth->width - 1)  || trans_y < 0 || trans_y > (in_smooth->height - 1))	continue;
+			if (trans_x < 0 || trans_x > (in_smooth.cols - 1)  || 
+			    trans_y < 0 || trans_y > (in_smooth.rows - 1)){
+			    continue;
+			}
 			orient_dx -= get_image_value(in_smooth,trans_x,trans_y);
 		
 			x1 = x - r * sin(theta);
@@ -321,7 +343,10 @@ Pixel* Normalize_Patch(const OxKey &key,IplImage* in,float scale,int patch_width
 			trans_y = trans[2] * x1 + trans[3] * y1 + key.y; 
 			trans_x -= minX;
 			trans_y -= minY;
-			if (trans_x < 0 || trans_x > (in_smooth->width - 1) || trans_y < 0 || trans_y > (in_smooth->height - 1))	continue;
+			if (trans_x < 0 || trans_x > (in_smooth.cols - 1) || 
+			    trans_y < 0 || trans_y > (in_smooth.rows - 1)){
+			    continue;
+			}
 			orient_dy = get_image_value(in_smooth,trans_x,trans_y);
 			
 			x1 = x + r * sin(theta);
@@ -330,38 +355,48 @@ Pixel* Normalize_Patch(const OxKey &key,IplImage* in,float scale,int patch_width
 			trans_y = trans[2] * x1 + trans[3] * y1 + key.y; 
 			trans_x -= minX;
 			trans_y -= minY;
-			if (trans_x < 0 || trans_x > (in_smooth->width - 1) || trans_y < 0 || trans_y > (in_smooth->height - 1))	continue;
+			if (trans_x < 0 || trans_x > (in_smooth.cols - 1) || 
+			    trans_y < 0 || trans_y > (in_smooth.rows - 1)){
+			    continue;
+			}
 			orient_dy -= get_image_value(in_smooth,trans_x,trans_y);
 			
 			pPixel_Array[nCount].orient_dx = orient_dx;
 			pPixel_Array[nCount].orient_dy = orient_dy;			
 			pPixel_Array[nCount].grid_pos_x = x;
 			pPixel_Array[nCount].grid_pos_y = y;
-			pPixel_Array[nCount].gray = out_data[(y + patch_radius + 8) * outPatch->width + (x + patch_radius + 8)];
+			pPixel_Array[nCount].gray = out_data[(y + patch_radius + 8) * outPatch.cols + (x + patch_radius + 8)];
 		
 			nCount++;
 		}
 	}
 	nPixels = nCount;
-	cvReleaseImage(&outPatch);
-	cvReleaseImage(&in_smooth);
+	
+	outPatch = NULL;
+	in_smooth = NULL;
 	return pPixel_Array;
 }
 
-float get_image_value(IplImage *pImg, float x, float y)
-{
-	int widthstep = pImg->widthStep;
-	
+float get_image_value(cv::Mat pImg, float x, float y)
+{	
 	int x1 = (int)x;
 	int y1 = (int)y;
 	int x2 = x1 + 1;
 	int y2 = y1 + 1;
 	float gray = 0;
 
-	if( (x2 - x) * (y2 - y) != 0 ) gray += (x2 - x) * (y2 - y) * (uchar)pImg->imageData[y1*widthstep+x1]/255.0f;
-	if( (x - x1) * (y2 - y) != 0 ) gray += (x - x1) * (y2 - y) * (uchar)pImg->imageData[y1*widthstep+x2]/255.0f; 
-	if( (x2 - x) * (y - y1) != 0 ) gray += (x2 - x) * (y - y1) * (uchar)pImg->imageData[y2*widthstep+x1]/255.0f; 
-	if( (x - x1) * (y - y1) != 0 ) gray += (x - x1) * (y - y1) * (uchar)pImg->imageData[y2*widthstep+x2]/255.0f;
+	if( (x2 - x) * (y2 - y) != 0 ){
+	    gray += (x2 - x) * (y2 - y) * pImg.at<uchar>(y1,x1)/255.0f;
+	}
+	if( (x - x1) * (y2 - y) != 0 ){
+	    gray += (x - x1) * (y2 - y) * pImg.at<uchar>(y1,x2)/255.0f;
+	}
+	if( (x2 - x) * (y - y1) != 0 ){
+	    gray += (x2 - x) * (y - y1) * pImg.at<uchar>(y2,x1)/255.0f;
+	}
+	if( (x - x1) * (y - y1) != 0 ){
+	    gray += (x - x1) * (y - y1) * pImg.at<uchar>(y2,x2)/255.0f;
+	}
 	
 	return gray;
 }

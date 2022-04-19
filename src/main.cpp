@@ -20,7 +20,7 @@ See the GNU General Public License for more details.
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include "mrogh.h"
+#include <mrogh.h>
 #include <ctime>
 
 
@@ -86,8 +86,12 @@ int main(int argc, char** argv)
 
 	CalcuTrans(m_pKeys,m_nKeys);
 
-	IplImage* m_pImg = cvLoadImage(im_file,CV_LOAD_IMAGE_GRAYSCALE);
-	cvSmooth(m_pImg,m_pImg,CV_GAUSSIAN,5,5,1);
+    printf("Past CalcuTrans now \n");
+
+	cv::Mat m_pImg = cv::imread(im_file,-1);
+	
+	cv::GaussianBlur( m_pImg, m_pImg, cv::Size( 5, 5 ), 1, 0 );
+    printf("Past 1st blur now \n");
 
 	FILE *fid = fopen(out_file,"wt");
 	fprintf(fid,"%d\n%d\n",m_Dim,m_nKeys);
@@ -96,7 +100,11 @@ int main(int argc, char** argv)
 	{
 		int *desc = 0;
 		desc = Extract_MROGH(m_pKeys[i],m_pImg,nDir,nOrder,nMultiRegion);
-		if ( !desc )	continue;
+		printf("%d past now \n",i);
+		
+		if ( !desc ){
+		    continue;
+		}
 		fprintf(fid,"%f %f %f %f %f",m_pKeys[i].x,m_pKeys[i].y,m_pKeys[i].a,m_pKeys[i].b,m_pKeys[i].c);
 		for (int j = 0;j < m_Dim;j++)
 		{
@@ -110,9 +118,11 @@ int main(int argc, char** argv)
 	final = clock();
 	printf("\nUsed %lf seconds\n", (double)(final - start) / CLOCKS_PER_SEC);
 
-	cvReleaseImage(&m_pImg);
+	m_pImg = NULL;
 
 	delete [] m_pKeys;
 
 	return 0;
 }
+
+

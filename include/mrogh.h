@@ -20,19 +20,9 @@ See the GNU General Public License for more details.
 #ifndef MROGH_H
 #define MROGH_H
 
-#include <highgui.h>
-#include <cxcore.h>
-#include <cv.h>
-
-#ifdef   _DEBUG 
-#pragma comment(lib,"opencv_highgui231d.lib")
-#pragma comment(lib,"opencv_core231d.lib")
-#pragma comment(lib,"opencv_imgproc231d.lib")
-#else
-#pragma comment(lib,"opencv_highgui231.lib")
-#pragma comment(lib,"opencv_core231.lib")
-#pragma comment(lib,"opencv_imgproc231.lib")
-#endif
+#include <opencv2/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 
 struct OxKey 
 {
@@ -60,10 +50,10 @@ struct Pixel
 
 OxKey* ReadKeyFile(const char* filename, int& keynum);
 void CalcuTrans(OxKey* pKeys,int n);
-int* Extract_MROGH(const OxKey &key, IplImage *im, int nDir,int nOrder,int nRegion);
-int* Extract_OGH(const OxKey &key,IplImage *imSrc,int nDir,int nOrder,double scale,int patch_width);
+int* Extract_MROGH(const OxKey &key, cv::Mat im, int nDir,int nOrder,int nRegion);
+int* Extract_OGH(const OxKey &key,cv::Mat imSrc,int nDir,int nOrder,double scale,int patch_width);
 void Norm_desc(float *desc, double illuThresh, int dim);
-float get_image_value(IplImage *pImg, float x, float y);
-Pixel* Normalize_Patch(const OxKey &key,IplImage* in,float scale,int patch_width,int &nPixels);
+float get_image_value(cv::Mat pImg, float x, float y);
+Pixel* Normalize_Patch(const OxKey &key,cv::Mat in,float scale,int patch_width,int &nPixels);
 
 #endif
